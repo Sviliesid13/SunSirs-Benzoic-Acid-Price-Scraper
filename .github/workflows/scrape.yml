@@ -1,0 +1,54 @@
+name: Scrape SunSirs Benzoic Acid Price
+
+on:
+  # ── Scheduled run: every day at 09:00 UTC ──────────────────────────────────
+  schedule:
+    - cron: "0 9 * * *"
+
+  # ── Allow a one-click manual run from the Actions tab ──────────────────────
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: write   # needed to push the updated CSV back to the repo
+
+    steps:
+      # 1. Check out the repo (so we can read & update prices.csv)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 3. Install dependencies
+      - name: Install Python dependencies
+        run: |
+          pip install playwright
+
+      # 4. Install Playwright's Chromium browser
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      # 5. Run the scraper
+      - name: Run scraper
+        run: python scraper.py
+
+      # 6. Commit the updated CSV back to main
+      #    (only if prices.csv actually changed)
+      - name: Commit updated prices.csv
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prices.csv
+          # Only commit if there is something new
+          git diff --cached --quiet || git commit -m "chore: add price for $(date -u +%Y-%m-%d)"
+          git push
