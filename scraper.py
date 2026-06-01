@@ -1,6 +1,5 @@
 import csv
 import os
-from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright
 
 URL = "https://www.sunsirs.com/uk/prodetail-177.html"
@@ -23,13 +22,17 @@ def scrape_price() -> tuple[str, str] | tuple[None, None]:
             viewport={"width": 1280, "height": 800},
         )
         page = context.new_page()
-        page.goto(URL, wait_until="networkidle", timeout=60_000)
-        page.wait_for_timeout(3_000)
 
-        # The table structure is:
+        # Use domcontentloaded instead of networkidle —
+        # the site has ads/trackers that never fully settle and cause timeouts
+        page.goto(URL, wait_until="domcontentloaded", timeout=60_000)
+
+        # Wait for the price table to appear in the DOM
+        page.wait_for_selector("table tr td", timeout=15_000)
+
+        # Table structure:
         # <tr><td>Commodity</td><td>Sectors</td><td>Price</td><td>Date</td></tr>
-        # <tr><td>Toluene</td><td>Chemical</td><td>6594.33</td><td>2026-05-28</td></tr>
-        # First data row = most recent entry
+        # <tr><td>Toluene</td><td>Chemical</td><td>6594.33</td><td>2026-05-29</td></tr>
         rows = page.query_selector_all("table tr")
 
         price = None
@@ -41,7 +44,6 @@ def scrape_price() -> tuple[str, str] | tuple[None, None]:
                 commodity = cells[0].inner_text().strip()
                 price_val = cells[2].inner_text().strip()
                 date_val  = cells[3].inner_text().strip()
-                # Skip the header row; grab the first real data row
                 if commodity != "Commodity" and price_val.replace(".", "").isdigit():
                     price    = price_val
                     date_str = date_val
